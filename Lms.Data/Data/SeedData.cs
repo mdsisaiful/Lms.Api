@@ -12,12 +12,7 @@ namespace Lms.Data.Data
 {
     public static class SeedData
     {
-        //private static Faker fake = new Faker("sv");
-
-        //public SeedData(Faker fake)
-        //{
-        //    this.fake = new Faker("sv");
-        //}
+       
         public static async Task InitAsync(IServiceProvider services)
         {
             using (var context = new ApplicationDbContext(services.GetRequiredService<DbContextOptions<ApplicationDbContext>>()))
@@ -32,20 +27,16 @@ namespace Lms.Data.Data
                 var courses = GetCourses();
                 var modules = GetModules();
 
-                //await context.AddRangeAsync(modules);
-
-                // Skriv kod för att seeda några kurser som alla har några tillhörande moduler.
 
                 foreach (var course in courses)
                 {
                     var someModules = new List<Module>();
                     var r = new Random();
-                    //var r = fake.Random.Int(1, 20);
-                    //var someModules = fake.Random(0, 3);
+
 
                     for (int i = 0; i < 5; i++)
                     {
-                        someModules.Add(modules[r.Next(1,20)]);
+                        someModules.Add(modules[r.Next(0,20)]);
                     }
 
 
@@ -54,7 +45,7 @@ namespace Lms.Data.Data
                 }
 
                 await context.AddRangeAsync(courses);
-                //context.AddRange(courses);
+                await context.AddRangeAsync(modules);
                 await context.SaveChangesAsync();
             }
         }
