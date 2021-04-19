@@ -13,6 +13,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Lms.Data.Data;
+using Lms.Data.Repositories;
+using Lms.Core.Repositories;
 
 namespace Lms.Api
 {
@@ -29,9 +31,14 @@ namespace Lms.Api
         public void ConfigureServices(IServiceCollection services)
         {
 
-            services.AddControllers(opt => opt.ReturnHttpNotAcceptable = true)
-                .AddNewtonsoftJson()
-                .AddXmlDataContractSerializerFormatters();
+            services.AddControllers(opt =>
+            {
+                opt.ReturnHttpNotAcceptable = true;
+                // By default, the framework removes Async from ActionNames. Hence override it in here.
+                opt.SuppressAsyncSuffixInActionNames = false;
+            })
+             .AddNewtonsoftJson()
+             .AddXmlDataContractSerializerFormatters();
 
             services.AddSwaggerGen(c =>
             {
@@ -40,6 +47,9 @@ namespace Lms.Api
 
             services.AddDbContext<ApplicationDbContext>(options =>
                     options.UseSqlServer(Configuration.GetConnectionString("ApplicationDbContext")));
+
+            services.AddScoped<IUoW,UoW>();
+            services.AddAutoMapper(typeof(MapperProfile));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -7,102 +7,155 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Lms.Core.Entities;
 using Lms.Data.Data;
+using Lms.Core.Repositories;
+using AutoMapper;
+using Lms.Core.Dto;
+using Microsoft.AspNetCore.JsonPatch;
 
 namespace Lms.Api.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/courses")]
     [ApiController]
     public class CoursesController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext db;
+        private readonly IUoW uow;
+        private readonly IMapper mapper;
 
-        public CoursesController(ApplicationDbContext context)
+        public CoursesController(ApplicationDbContext context, IUoW uow, IMapper mapper)
         {
-            _context = context;
+            db = context;
+            this.uow = uow;
+            this.mapper = mapper;
         }
 
         // GET: api/Courses
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Course>>> GetCourse()
+        [HttpGet()]
+        [HttpHead]
+
+        //public async Task<ActionResult<IEnumerable<CourseDto>>> GetCourses()
+        //{
+        //    var coursesFromRepo = await uow.CourseRepository.GetAllCourses();
+        //    var coursesDto = mapper.Map<IEnumerable<CourseDto>>(coursesFromRepo);
+        //    return Ok(coursesDto);
+        //}
+
+        public async Task<ActionResult<IEnumerable<CourseDto>>> GetCourses(bool includeModels = false)
         {
-            return await _context.Courses.ToListAsync();
+            //var coursesFromRepo = await uow.CourseRepository.GetAllCourses();
+            var coursesFromRepo = await uow.CourseRepository.GetAllCourses(includeModels);
+            var coursesDto = mapper.Map<IEnumerable<CourseDto>>(coursesFromRepo);
+            return Ok(coursesDto);
         }
 
         // GET: api/Courses/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Course>> GetCourse(int id)
+        [HttpGet("{id}", Name = "GetCourse")]
+        public async Task<ActionResult<CourseDto>> GetCourse(int? id)
         {
-            var course = await _context.Courses.FindAsync(id);
-
-            if (course == null)
+            var courseFromRepo = await uow.CourseRepository.GetCourse(id);
+            if (courseFromRepo == null)
             {
-                return NotFound();
+                return BadRequest();
             }
 
-            return course;
+            var courseDto = mapper.Map<CourseDto>(courseFromRepo);
+            return Ok(courseDto);
         }
 
         // PUT: api/Courses/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutCourse(int id, Course course)
+        public async Task<ActionResult<CourseDto>> PutCourse(int id, CourseDto courseDto)
         {
-            if (id != course.Id)
+            var courseFromRepo = await uow.CourseRepository.GetCourse(id);
+
+            if (courseFromRepo is null)
             {
-                return BadRequest();
+                return NotFound();
             }
 
-            _context.Entry(course).State = EntityState.Modified;
-
-            try
+            mapper.Map(courseDto, courseFromRepo);
+            if (await uow.ModuleRepository.SaveAsync())
             {
-                await _context.SaveChangesAsync();
+                return Ok(mapper.Map<CourseDto>(courseFromRepo));
             }
-            catch (DbUpdateConcurrencyException)
+            else
             {
-                if (!CourseExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return StatusCode(500);
             }
-
-            return NoContent();
         }
 
         // POST: api/Courses
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Course>> PostCourse(Course course)
+        public async Task<ActionResult<CourseDto>> PostCourse(CourseDto courseDto)
         {
-            _context.Courses.Add(course);
-            await _context.SaveChangesAsync();
+            var courseEntity = mapper.Map<Course>(courseDto);
+            await uow.CourseRepository.AddAsync(courseEntity);
+            await uow.CourseRepository.SaveAsync();
 
-            return CreatedAtAction("GetCourse", new { id = course.Id }, course);
+            var courseToReturn = mapper.Map<CourseDto>(courseEntity);
+            //return CreatedAtRoute("GetCourse", 
+            //    new { id = courseToReturn.Title }, 
+            //    courseToReturn);
+            //return Ok(courseToReturn);
+            return Ok();
         }
 
         // DELETE: api/Courses/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCourse(int id)
         {
-            var course = await _context.Courses.FindAsync(id);
-            if (course == null)
+            var courseFromRepo = await uow.CourseRepository.GetCourse(id);
+            if (courseFromRepo == null)
             {
                 return NotFound();
             }
 
-            _context.Courses.Remove(course);
-            await _context.SaveChangesAsync();
+            uow.CourseRepository.RemoveCourse(courseFromRepo);
+            await uow.CourseRepository.SaveAsync();
 
             return NoContent();
         }
 
+        
+
+        [HttpPatch("{courseId}")]
+        public async Task<ActionResult<CourseDto>> PatchCourse(int courseId,
+            JsonPatchDocument<CourseDto> patchDocument)
+        {
+            var course = await uow.CourseRepository.GetCourse(courseId);
+
+            if (course is null)
+            {
+                return NotFound();
+            }
+
+            var model = mapper.Map<CourseDto>(course);
+            
+            patchDocument.ApplyTo(model, ModelState);
+
+            if (!TryValidateModel(model))
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            mapper.Map(model, course);
+
+            if (await uow.CourseRepository.SaveAsync())
+            {
+                return Ok(mapper.Map<CourseDto>(model));
+            }
+            else
+            {
+                return StatusCode(500);
+            }
+
+        }
+
         private bool CourseExists(int id)
         {
-            return _context.Courses.Any(e => e.Id == id);
+            return uow.CourseRepository.Any(id);
         }
     }
 }
